@@ -71,7 +71,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------------------------
-# 1. INITIALIZE CLOUD VECTOR DATABASE & EMBEDDING MODEL
+# 1. INITIALIZE CLOUD VECTOR DATABASE & EMBEDDINGS
 # ------------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Connecting to Qdrant Cloud & Vector Models...")
 def initialize_system():
@@ -99,6 +99,24 @@ def initialize_system():
     return encoder, client, collection_name
 
 encoder, qdrant_client, COLLECTION_NAME = initialize_system()
+
+# Helper function to detect available Groq model
+def get_active_groq_model(groq_client: Groq) -> str:
+    """Finds the best active model available on the user's Groq tier."""
+    try:
+        available_ids = [m.id for m in groq_client.models.list().data]
+        priority_models = [
+            "llama-3.1-8b-instant",
+            "llama-3.3-70b-versatile",
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b"
+        ]
+        for p in priority_models:
+            if p in available_ids:
+                return p
+        return available_ids[0] if available_ids else "llama-3.1-8b-instant"
+    except Exception:
+        return "llama-3.1-8b-instant"
 
 # ------------------------------------------------------------------------------
 # 2. TRI-AGENT JURISTIC PIPELINE
@@ -130,6 +148,7 @@ def run_agentic_workflow(user_query: str, selected_lang: str, limit: int) -> Sta
             state.target_lang = "English"
 
     groq_client = Groq(api_key=groq_api_key) if groq_api_key else None
+    active_model = get_active_groq_model(groq_client) if groq_client else "llama-3.1-8b-instant"
 
     # --------------------------------------------------------------------------
     # AGENT 1: Query Transformation into Classical Hanafi Arabic Terminology
@@ -146,7 +165,7 @@ def run_agentic_workflow(user_query: str, selected_lang: str, limit: int) -> Sta
             """
             
             expansion_res = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model=active_model,
                 messages=[
                     {"role": "system", "content": expansion_prompt},
                     {"role": "user", "content": f"User Inquiry: {user_query}"}
@@ -217,7 +236,7 @@ def run_agentic_workflow(user_query: str, selected_lang: str, limit: int) -> Sta
             user_msg = f"User Question: {user_query}\nCanonical Arabic Findings:\n{context_payload}"
 
             completion = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model=active_model,
                 messages=[
                     {"role": "system", "content": synthesis_prompt},
                     {"role": "user", "content": user_msg}
@@ -236,7 +255,7 @@ def run_agentic_workflow(user_query: str, selected_lang: str, limit: int) -> Sta
                     "point": item.get("legal_point", "")
                 }
         except Exception as e:
-            state.juristic_synthesis = f"نصوص حاصل ہو گئے ہیں، تجزیاتی ماڈل کا مسئلہ: {str(e)}"
+            state.juristic_synthesis = f"نصوص حاصل ہو گئے ہیں، لیکن ماڈل تجزیہ میں رکاوٹ آئی: {str(e)}"
     else:
         state.juristic_synthesis = "فقہ حنفی کے معتمد ذخیرے سے نصوص برآمد ہو گئے ہیں۔ برائے مہربانی Streamlit Secrets میں GROQ_API_KEY کی تصدیق فرمائیں۔"
 
