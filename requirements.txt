@@ -4,6 +4,7 @@ sentence-transformers>=2.7.0
 langchain-text-splitters>=0.2.0
 pydantic>=2.7.0
 requests>=2.31.0
+groq>=0.9.0
 reportlab>=4.1.0
 arabic-reshaper>=3.0.0
 python-bidi>=0.4.2
